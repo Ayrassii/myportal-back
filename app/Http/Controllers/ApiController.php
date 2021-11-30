@@ -147,6 +147,7 @@ class ApiController extends Controller
                         "is_main" => $count === 1
                     ]);
                 } else {
+                   try{
                     Media::create([
                         "entry_id" =>$feed->id,
                         "createdby_id" => $logged->id,
@@ -154,6 +155,16 @@ class ApiController extends Controller
                         "path" => $media['path'],
                         "is_main" => $count === 1
                     ]);
+                   } catch(\Exception $e) {
+                    $return = Entry::with(['owner','comments','likes','medias' => function ($q) {
+                        return $q->where('is_main', true);
+                    }])
+                        ->withCount(['comments','likes'])
+                        ->where('type','=','TYPE_FEED')
+                        ->where('id',$feed->id)
+                        ->first();
+                    return response()->json($return);
+                   }
                 }
             }
         }
