@@ -38,6 +38,7 @@ Route::group([
     Route::get('/upcoming-birthdays','ApiController@upcomingBirthdays');
     Route::get('/question','ApiController@todaysQuestion');
     Route::post('/question','ApiController@answerQuestion');
+    Route::post('/addquestion','ApiController@addQuestion');
     Route::get('/employe-of-month','ApiController@employeOfTheMonth');
     Route::post('/employe-of-month','ApiController@setEmployeOfTheMonth');
     Route::get('/events','ApiController@listEvent');

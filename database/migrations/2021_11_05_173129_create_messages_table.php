@@ -23,6 +23,7 @@ class CreateMessagesTable extends Migration
             $table->foreign('discussion_id')->on('discussions')->references('id')->onDelete('cascade');
             $table->boolean('is_deleted')->default(false);
             $table->longText('body');
+            $table->dateTime('read_at')->nullable();
             $table->timestamps();
         });
     }

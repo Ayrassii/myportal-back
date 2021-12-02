@@ -147,24 +147,24 @@ class ApiController extends Controller
                         "is_main" => $count === 1
                     ]);
                 } else {
-                   try{
-                    Media::create([
-                        "entry_id" =>$feed->id,
-                        "createdby_id" => $logged->id,
-                        "type" => $media['type'],
-                        "path" => $media['path'],
-                        "is_main" => $count === 1
-                    ]);
-                   } catch(\Exception $e) {
-                    $return = Entry::with(['owner','comments','likes','medias' => function ($q) {
-                        return $q->where('is_main', true);
-                    }])
-                        ->withCount(['comments','likes'])
-                        ->where('type','=','TYPE_FEED')
-                        ->where('id',$feed->id)
-                        ->first();
-                    return response()->json($return);
-                   }
+                    try{
+                        Media::create([
+                            "entry_id" =>$feed->id,
+                            "createdby_id" => $logged->id,
+                            "type" => $media['type'],
+                            "path" => $media['path'],
+                            "is_main" => $count === 1
+                        ]);
+                    } catch(\Exception $e) {
+                        $return = Entry::with(['owner','comments','likes','medias' => function ($q) {
+                            return $q->where('is_main', true);
+                        }])
+                            ->withCount(['comments','likes'])
+                            ->where('type','=','TYPE_FEED')
+                            ->where('id',$feed->id)
+                            ->first();
+                        return response()->json($return);
+                    }
                 }
             }
         }
@@ -233,10 +233,17 @@ class ApiController extends Controller
         if ($logged->isAdmin()) {
             $feed->is_deleted = true;
         }
-        $feeds = Entry::with('owner')
+        $feed->save();
+        $feeds = Entry::with(['owner','likes','medias' => function($q) {
+            return $q->where('is_main', true);
+        }])
             ->withCount(['comments','likes'])
             ->where('type','=','TYPE_FEED')
-            ->where('is_deleted',false)
+            ->where('is_deleted',false);
+        if (!auth()->user()->isAdmin()) {
+            $feeds = $feeds->where('is_valid', true);
+        }
+        $feeds = $feeds->orderBy('created_at','desc')
             ->get();
         return response()->json($feeds);
     }
@@ -371,6 +378,23 @@ class ApiController extends Controller
         return response()->json($result);
     }
 
+    public function addQuestion(Request $request) {
+        $question = Question::create([
+            'content' => $request->get('contenu'),
+            'createdby_id' => auth('api')->id()
+        ]);
+        foreach ($request->get('answers') as $a) {
+            Answer::create([
+                "createdby_id" => auth('api')->id(),
+                "question_id" => $question->id,
+                "text" => $a['texte'],
+            ]);
+        }
+        $returnquestion = Question::with('answers')->find($question->id);
+        return response()->json(['question' =>$returnquestion, 'answered' => false, 'responses_count' => 0]);
+
+    }
+
     //Today's Question
     public function todaysQuestion(){
         $question = Question::with('answers')
@@ -381,7 +405,7 @@ class ApiController extends Controller
             ->where('createdby_id', auth()->id())
             ->exists();
         $responses_count = AnswerResponse::whereIn('answer_id',$answers_ids)
-        ->count();
+            ->count();
         if ($user_responded) {
             $question = Question::with('answers.answer_responses')
                 ->orderBy('questions.created_at','desc')
@@ -395,15 +419,15 @@ class ApiController extends Controller
     //Answer Question
     public function answerQuestion(Request $request){
         AnswerResponse::create([
-           "answer_id" => $request->answer_id,
-           "createdby_id" => auth()->id(),
-           "is_deleted" => false
+            "answer_id" => $request->answer_id,
+            "createdby_id" => auth()->id(),
+            "is_deleted" => false
         ]);
         $question = Question::with('answers.answer_responses')
             ->find($request->question_id);
         $answers_ids = $question->answers()->pluck('id');
         $responses_count = AnswerResponse::whereIn('answer_id',$answers_ids)
-        ->count();
+            ->count();
         return response()->json(['question' =>$question, 'answered' => true,'responses_count' => $responses_count]);
     }
 
@@ -562,12 +586,16 @@ class ApiController extends Controller
         if ($logged->isAdmin()) {
             $event->is_deleted = true;
         }
-        $feeds = Entry::with('owner')
+        $event->save();
+        $events = Entry::with(['owner','medias' => function($q) {
+            return $q->where('is_main', true);
+        }])
             ->withCount(['comments','likes'])
             ->where('type','=','TYPE_EVENT')
-            ->where('is_deleted',false)
+            ->where('is_deleted',false);
+        $events = $events->orderBy('created_at','desc')
             ->get();
-        return response()->json($feeds);
+        return response()->json($events);
     }
 
     //list Article
@@ -705,12 +733,16 @@ class ApiController extends Controller
         if ($logged->isAdmin()) {
             $article->is_deleted = true;
         }
-        $feeds = Entry::with('owner')
+        $article->save();
+        $articles = Entry::with(['owner','medias' => function($q) {
+            return $q->where('is_main', true);
+        }])
             ->withCount(['comments','likes'])
             ->where('type','=','TYPE_ARTICLE')
             ->where('is_deleted',false)
+            ->orderBy('created_at','desc')
             ->get();
-        return response()->json($feeds);
+        return response()->json($articles);
     }
 
     //add Annuary
@@ -736,10 +768,13 @@ class ApiController extends Controller
 
     //list Discussions
     public function listDiscussions(){
-        $discussions = Discussion::with(['messages' => function($q) {
-            return $q->with(['sender','receiver'])
-                ->orderBy('created_at','desc')->first();
-        }])
+        $discussions = Discussion::with([
+            'creator',
+            'destination',
+            'messages' => function($q) {
+                return $q->with(['sender','receiver'])
+                    ->orderBy('created_at','desc')->get();
+            }])
             ->where('createdby_id',auth()->id())
             ->orWhere('destination_id',auth()->id())
             ->get();
@@ -857,8 +892,8 @@ class ApiController extends Controller
     //list Ideas
     public function listIdeas() {
         if (auth()->user()->isAdmin()) {
-        $ideas = Idea::orderBy('created_at','desc')->get();
-        return response()->json($ideas);
+            $ideas = Idea::orderBy('created_at','desc')->get();
+            return response()->json($ideas);
         }
         return response()->json(['message' => 'not admin'], 401);
 

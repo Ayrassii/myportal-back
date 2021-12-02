@@ -11,4 +11,11 @@ class Discussion extends Model
     public function messages() {
         return $this->hasMany(Message::class);
     }
+    public function creator() {
+        return $this->belongsTo(User::class, 'createdby_id');
+    }
+
+    public function destination() {
+        return $this->belongsTo(User::class, 'destination_id');
+    }
 }
